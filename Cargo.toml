@@ -1,0 +1,18 @@
+[package]
+name = "diesel_transaction_handles"
+version = "0.1.0"
+authors = ["Aiden McClelland <gagglehoof@gmail.com>"]
+edition = "2018"
+
+[features]
+default = ["rollback_hooks"]
+log_errors_on_drop = []
+panic_errors_on_drop = []
+rollback_hooks = []
+
+[dependencies]
+diesel = "1.4"
+failure = "*"
+
+[dev-dependencies]
+diesel = { version = "1.4", features = ["postgres"] }
