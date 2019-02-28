@@ -2,6 +2,12 @@
 name = "diesel_transaction_handles"
 version = "0.1.0"
 authors = ["Aiden McClelland <gagglehoof@gmail.com>"]
+repository = "https://github.com/DR-BoneZ/diesel-transaction-handles-rs"
+homepage = "https://github.com/DR-BoneZ/diesel-transaction-handles-rs"
+license = "MIT"
+readme = "README.md"
+documentation = "http://docs.rs/diesel_transaction_handles/"
+description = "shareable transaction handles for diesel, with optional rollback hooks"
 edition = "2018"
 
 [features]
