@@ -1,7 +1,11 @@
+#[macro_use]
+extern crate failure;
+
 use diesel::connection::Connection;
 use diesel::connection::SimpleConnection;
 use diesel::connection::TransactionManager;
-use diesel::result::Error;
+use diesel::result::Error as DieselError;
+use failure::Error as FailureError;
 use std::sync::Mutex;
 
 #[cfg(all(feature = "log_errors_on_drop", feature = "panic_errors_on_drop"))]
@@ -10,14 +14,36 @@ compile_error!(
 );
 
 #[cfg(all(nightly, feature = "rollback_hooks"))]
-pub type RollbackHook = Box<dyn FnOnce() -> Result<(), E> + Send>;
+pub type RollbackHook = Box<dyn FnOnce() -> Result<(), failure::Error> + Send>;
 #[cfg(all(not(nightly), feature = "rollback_hooks"))]
 pub type RollbackHook = Box<fn() -> Result<(), failure::Error>>;
 
-#[cfg(feature = "rollback_hooks")]
-type EitherError = failure::Error;
-#[cfg(not(feature = "rollback_hooks"))]
-type EitherError = Error;
+#[derive(Debug, Fail)]
+pub enum Error {
+    #[fail(display = "Diesel Error: {}", _0)]
+    Diesel(DieselError),
+    #[fail(display = "Custom Error: {}", _0)]
+    Failure(FailureError),
+}
+impl From<DieselError> for Error {
+    fn from(err: DieselError) -> Self {
+        Error::Diesel(err)
+    }
+}
+impl From<FailureError> for Error {
+    fn from(err: FailureError) -> Self {
+        Error::Failure(err)
+    }
+}
+
+#[derive(Debug, Fail)]
+#[fail(display = "The following errors ocurred: {:?}.", _0)]
+pub struct ErrorVec(pub Vec<Error>);
+impl From<Vec<Error>> for ErrorVec {
+    fn from(err_vec: Vec<Error>) -> Self {
+        ErrorVec(err_vec)
+    }
+}
 
 #[cfg(feature = "rollback_hooks")]
 pub struct TransactionalConnection<T: Connection>(Mutex<T>, Mutex<Vec<RollbackHook>>);
@@ -40,13 +66,17 @@ impl<C: Connection> TransactionalConnection<C> {
         res
     }
 
-    pub fn rollback(self) -> Result<(), EitherError> {
+    pub fn rollback(self) -> Result<(), ErrorVec> {
+        let mut errs = vec![];
         #[cfg(feature = "rollback_hooks")]
         {
             let mut guard = self.1.lock().unwrap();
             while !guard.is_empty() {
                 let hook = guard.pop().unwrap();
-                hook()?;
+                match hook() {
+                    Err(e) => errs.push(Error::from(e)),
+                    _ => (),
+                }
             }
         }
 
@@ -54,7 +84,17 @@ impl<C: Connection> TransactionalConnection<C> {
         let man = guard.transaction_manager();
 
         while TransactionManager::<C>::get_transaction_depth(man) > 0 {
-            man.rollback_transaction(&*guard)?;
+            match man.rollback_transaction(&*guard) {
+                Err(e) => {
+                    errs.push(Error::from(e));
+                    break;
+                }
+                _ => (),
+            }
+        }
+
+        if !errs.is_empty() {
+            Err(errs)?;
         }
 
         Ok(())

@@ -17,9 +17,14 @@ diesel_transaction_handles = "0.1.0"
 
 ### Example:
 ```rust
+#[macro_use]
+extern crate failure;
+
 use diesel::prelude::*;
-use diesel_transaction_handles::Transaction;
+use diesel_transaction_handles::TransactionalConnection;
 use std::sync::Arc;
+use crate::external;
+use crate::schema::things_done;
 
 fn main() {
 
@@ -29,14 +34,15 @@ fn main() {
 
     let arccon_ = arccon.clone();
     let job1 = std::thread::spawn(move || {
-        println!("SELECTing TRUE");
-        arccon_.add_rollback_hook(|| Ok(println!("Nevermind, rolling back.")));
-        diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>("TRUE")).load::<bool>(&*arccon_)
+        let id = external::do_the_thing().unwrap(3);
+        arccon_.add_rollback_hook(|| external::undo_the_thing(id));
+        diesel::insert_into(things_done::table).values(things_done::id.eq(id)).execute(&*arccon_)
     });
 
     let arccon_ = arccon.clone();
-    let job2 = std::thread::spawn(move || {
-        diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>("FALSE")).load::<bool>(&*arccon_)
+    let job2 = std::thread::spawn(move || -> Result<usize, failure::Error> {
+        let f = diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>("FALSE")).load::<bool>(&*arccon_)?;
+        bail!("yikes")
     });
 
     let job1res = job1.join().unwrap();
@@ -51,7 +57,7 @@ fn main() {
         Arc::try_unwrap(arccon)
             .map_err(|_| "Arc still held by multiple threads.")
             .unwrap()
-            .handle_result(res)
+            .handle_result(res) // rollback occurs here
     );
 }
 ```

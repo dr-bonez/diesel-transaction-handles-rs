@@ -1,6 +1,6 @@
 [package]
 name = "diesel_transaction_handles"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Aiden McClelland <gagglehoof@gmail.com>"]
 repository = "https://github.com/DR-BoneZ/diesel-transaction-handles-rs"
 homepage = "https://github.com/DR-BoneZ/diesel-transaction-handles-rs"
