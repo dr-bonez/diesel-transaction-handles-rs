@@ -18,7 +18,7 @@ rollback_hooks = []
 
 [dependencies]
 diesel = "1.4"
-failure = "*"
+failure = "0.1"
 
 [dev-dependencies]
 diesel = { version = "1.4", features = ["postgres"] }
